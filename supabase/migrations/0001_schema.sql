@@ -27,10 +27,16 @@ create table sources (
 create table buildings (
   id         bigint generated always as identity primary key,
   bev_id     text not null unique,      -- id from the BEV dataset
-  city_id    bigint references cities(id) on delete set null,
+  gkz        text not null default '30201',  -- Gemeindekennzahl (St. Pölten)
   geom       geometry(MultiPolygon, 4326) not null,
   name       text,                      -- optional own attributes
-  address    text,
+  address    text,                      -- BEV address_1
+  address_2  text,                      -- BEV address_2
+  agwr_id    bigint,                    -- AGWR_OBJEKTNUMMER
+  height_m        numeric(6,1),         -- HOEHE_OBJEKT_MAX (for 3D / extrusion)
+  height_median_m numeric(6,1),         -- HOEHE_OBJEKT_MEDIAN
+  ground_height_m numeric(6,1),         -- HOEHE_BODEN_MEDIAN (m a.s.l.)
+  area_m2         numeric(10,2),        -- SHAPE_AREA
   year_built int check (year_built between 0 and 2100)
 );
 
@@ -102,7 +108,7 @@ create index buildings_geom_idx on buildings using gist (geom);
 create index cards_geom_idx     on cards     using gist (geom);
 create index cities_center_idx  on cities    using gist (center);
 -- Foreign keys (the PK of join tables already covers the first column)
-create index buildings_city_idx   on buildings (city_id);
+create index buildings_gkz_idx    on buildings (gkz);
 create index cards_building_idx   on cards (building_id);
 create index cards_source_idx     on cards (source_id);
 create index cards_city_idx       on cards (city_id);

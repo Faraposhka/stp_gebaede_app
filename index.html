@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>St. Pölten – Gebäude</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  /* Bottom sheet: mobile-first, max 60% height, scrollable */
+  #sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; max-height: 60%;
+    background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(0,0,0,.25);
+    transform: translateY(100%); transition: transform .25s; z-index: 5;
+    display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
+  }
+  #sheet.open { transform: none; }
+  #sheet header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eee; }
+  #sheet h2 { flex: 1; margin: 0; font-size: 1rem; }
+  #close { border: 0; background: none; font-size: 1.5rem; min-width: 44px; min-height: 44px; }
+  #content { overflow-y: auto; padding: 8px 16px 16px; }
+  .card { padding: 12px 0; border-bottom: 1px solid #eee; }
+  .card p { margin: 0 0 6px; }
+  .meta { font-size: .8rem; color: #555; }
+  .tag { display: inline-block; background: #eef; border-radius: 10px; padding: 2px 8px; margin: 2px 4px 0 0; font-size: .75rem; }
+  .empty { text-align: center; color: #555; padding: 24px 0; }
+  #legend { position: absolute; top: 8px; left: 8px; background: #fffd; padding: 6px 8px;
+    border-radius: 6px; font-size: .7rem; z-index: 2; }
+  #legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="legend"></div>
+<div id="sheet" role="dialog" aria-live="polite">
+  <header><h2 id="title"></h2><button id="close" aria-label="Schließen">×</button></header>
+  <div id="content"></div>
+</div>
+<script>
+const C = window.APP_CONFIG;
+
+// Era palette (year_built); gray = unknown
+const ERAS = [
+  [1700, "#7b3f00", "bis 1700"], [1850, "#c0392b", "1700–1850"],
+  [1918, "#e67e22", "1850–1918"], [1945, "#f1c40f", "1918–1945"],
+  [1980, "#27ae60", "1945–1980"], [2100, "#2980b9", "ab 1980"]
+];
+const UNKNOWN = "#9e9e9e";
+const colorExpr = ["case", ["!", ["has", "year_built"]], UNKNOWN,
+  ["step", ["to-number", ["get", "year_built"]], ERAS[0][1],
+    ...ERAS.slice(1).flatMap(([y, c], i) => [ERAS[i][0], c])]];
+document.getElementById("legend").innerHTML =
+  ERAS.map(e => `<div><i style="background:${e[1]}"></i>${e[2]}</div>`).join("") +
+  `<div><i style="background:${UNKNOWN}"></i>unbekannt</div>`;
+
+// Register the pmtiles:// protocol
+maplibregl.addProtocol("pmtiles", new pmtiles.Protocol().tile);
+
+const map = new maplibregl.Map({
+  container: "map",
+  center: C.CENTER, zoom: C.ZOOM,
+  attributionControl: false,
+  style: {
+    version: 8,
+    sources: {
+      osm: { type: "raster", tileSize: 256, maxzoom: 19,
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        attribution: "© OpenStreetMap" },
+      buildings: { type: "vector", url: "pmtiles://" + new URL(C.PMTILES_URL, location.href).href,
+        attribution: 'Datenquelle: BEV – <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener">CC BY 4.0</a>' }
+    },
+    layers: [
+      { id: "osm", type: "raster", source: "osm" },
+      { id: "buildings", type: "fill", source: "buildings", "source-layer": "buildings",
+        paint: { "fill-color": colorExpr, "fill-opacity": 0.8 } },
+      { id: "buildings-line", type: "line", source: "buildings", "source-layer": "buildings",
+        minzoom: 15, paint: { "line-color": "#333", "line-width": 0.5 } }
+    ]
+  }
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
+map.addControl(new maplibregl.AttributionControl({ compact: true }));
+
+const db = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY); // read-only anon key
+const sheet = document.getElementById("sheet"), content = document.getElementById("content");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const closeSheet = () => sheet.classList.remove("open");
+document.getElementById("close").onclick = closeSheet;
+
+map.on("mouseenter", "buildings", () => map.getCanvas().style.cursor = "pointer");
+map.on("mouseleave", "buildings", () => map.getCanvas().style.cursor = "");
+
+map.on("click", "buildings", async e => {
+  const bevId = e.features[0].properties.bev_id;
+  document.getElementById("title").textContent = "Gebäude " + bevId;
+  content.innerHTML = '<div class="empty">Lade …</div>';
+  sheet.classList.add("open");
+  try {
+    // Tiles carry the BEV id; cards reference buildings.id, so resolve it first
+    const { data: b, error: e1 } = await db.from("buildings").select("id").eq("bev_id", bevId).maybeSingle();
+    if (e1) throw e1;
+    let cards = [];
+    if (b) {
+      const { data, error } = await db.from("cards")
+        .select("id,title,body,year_from,year_to,date_type,sources(source_type,reference),card_tags(tags(name))")
+        .eq("building_id", b.id).order("year_from", { nullsFirst: false });
+      if (error) throw error;
+      cards = data;
+    }
+    render(cards);
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = '<div class="empty">Karten konnten nicht geladen werden.</div>';
+  }
+});
+
+function render(cards) {
+  if (!cards.length) {
+    content.innerHTML = '<div class="empty">Weißt du etwas über dieses Gebäude?<br>Know something about this building?</div>';
+    return;
+  }
+  content.innerHTML = cards.map(c => {
+    const years = c.year_from ? (c.year_to && c.year_to !== c.year_from ? `${c.year_from}–${c.year_to}` : c.year_from) : "";
+    const tags = (c.card_tags || []).map(t => `<span class="tag">${esc(t.tags.name)}</span>`).join("");
+    const src = c.sources ? `Quelle: ${esc(c.sources.source_type)} – ${esc(c.sources.reference)}` : "";
+    return `<div class="card">${c.title ? `<strong>${esc(c.title)}</strong>` : ""}
+      <p>${esc(c.body)}</p>
+      <div class="meta">${esc(years)} · ${esc(c.date_type)}</div>
+      <div class="meta">${src}</div><div>${tags}</div></div>`;
+  }).join("");
+}
+</script>
+</body>
+</html>
