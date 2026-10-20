@@ -6,7 +6,7 @@ Usage:
   python scripts/load_buildings.py
 
 DATABASE_URL is a secret: keep it in your shell/.env (git-ignored), never commit it.
-Only GLOBALID, address_1, address_2 and the geometry are kept; the rest is dropped.
+Kept: GLOBALID, address_1/2, AGWR id, heights, area and the geometry; the rest is dropped.
 Re-running is safe (existing GLOBALIDs are skipped).
 """
 import json
@@ -21,8 +21,9 @@ BATCH = 500
 
 # ST_MakeValid may return a collection; keep only polygons, as MultiPolygon.
 SQL = """
-insert into buildings (bev_id, gkz, address, address_2, geom)
-values (%s, %s, %s, %s,
+insert into buildings (bev_id, gkz, address, address_2,
+  agwr_id, height_m, height_median_m, ground_height_m, area_m2, geom)
+values (%s, %s, %s, %s, %s, %s, %s, %s, %s,
   ST_Multi(ST_CollectionExtract(
     ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)), 3)))
 on conflict (bev_id) do nothing
@@ -40,6 +41,9 @@ def main():
     for ft in features:
         p = ft["properties"]
         rows.append((p["GLOBALID"], GKZ, p.get("address_1"), p.get("address_2"),
+                     p.get("AGWR_OBJEKTNUMMER"), p.get("HOEHE_OBJEKT_MAX"),
+                     p.get("HOEHE_OBJEKT_MEDIAN"), p.get("HOEHE_BODEN_MEDIAN"),
+                     p.get("SHAPE_AREA"),
                      json.dumps(ft["geometry"])))
 
     with psycopg.connect(url) as conn, conn.cursor() as cur:

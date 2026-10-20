@@ -32,6 +32,11 @@ create table buildings (
   name       text,                      -- optional own attributes
   address    text,                      -- BEV address_1
   address_2  text,                      -- BEV address_2
+  agwr_id    bigint,                    -- AGWR_OBJEKTNUMMER
+  height_m        numeric(6,1),         -- HOEHE_OBJEKT_MAX (for 3D / extrusion)
+  height_median_m numeric(6,1),         -- HOEHE_OBJEKT_MEDIAN
+  ground_height_m numeric(6,1),         -- HOEHE_BODEN_MEDIAN (m a.s.l.)
+  area_m2         numeric(10,2),        -- SHAPE_AREA
   year_built int check (year_built between 0 and 2100)
 );
 
