@@ -1,0 +1,4 @@
+project_id = "eojpkklmzqszirmxsxia"
+
+[functions.rebuild-pmtiles]
+verify_jwt = false
