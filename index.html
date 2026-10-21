@@ -68,14 +68,14 @@ const map = new maplibregl.Map({
   style: {
     version: 8,
     sources: {
-      osm: { type: "raster", tileSize: 256, maxzoom: 19,
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        attribution: "© OpenStreetMap" },
+      basemap: { type: "raster", tileSize: 256, maxzoom: 19,
+        tiles: ["https://mapsneu.wien.gv.at/basemap/geolandbasemap/normal/google3857/{z}/{y}/{x}.png"],
+        attribution: '<a href="https://www.basemap.at/" target="_blank" rel="noopener">basemap.at</a>' },
       buildings: { type: "vector", url: "pmtiles://" + new URL(C.PMTILES_URL, location.href).href,
         attribution: 'Datenquelle: BEV – <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener">CC BY 4.0</a>' }
     },
     layers: [
-      { id: "osm", type: "raster", source: "osm" },
+      { id: "basemap", type: "raster", source: "basemap" },
       { id: "buildings", type: "fill", source: "buildings", "source-layer": "buildings",
         paint: { "fill-color": colorExpr, "fill-opacity": 0.8 } },
       { id: "buildings-line", type: "line", source: "buildings", "source-layer": "buildings",
@@ -96,8 +96,11 @@ map.on("mouseenter", "buildings", () => map.getCanvas().style.cursor = "pointer"
 map.on("mouseleave", "buildings", () => map.getCanvas().style.cursor = "");
 
 map.on("click", "buildings", async e => {
-  const bevId = e.features[0].properties.bev_id;
-  document.getElementById("title").textContent = "Gebäude " + bevId;
+  const feature = e.features[0];
+  const bevId = feature.properties.bev_id;
+  const address = [feature.properties.address_1, feature.properties.address_2]
+    .filter(Boolean).join(" / ");
+  document.getElementById("title").textContent = address || "Adresse unbekannt";
   content.innerHTML = '<div class="empty">Lade …</div>';
   sheet.classList.add("open");
   try {

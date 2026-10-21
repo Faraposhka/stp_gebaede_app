@@ -5,9 +5,10 @@ See `scripts/load_buildings.py`. Requires `DATABASE_URL` (Supabase Postgres URI)
 Building polygons: © BEV, CC BY 4.0.
 
 ## Map page
-`index.html` (+ `config.js` with Supabase URL / anon key) is a static page; serve it with any static server, e.g. `python -m http.server`.
-Build the tiles (layer must be named `buildings`, properties `bev_id`, `height_m`, `year_built`), e.g. from the database export:
+`index.html` (+ `config.js` with Supabase URL / publishable key) is a static page. PMTiles needs HTTP byte-range support, so for local development run `python scripts/serve.py` instead of `python -m http.server`.
 
-    tippecanoe -o buildings.pmtiles -l buildings -zg --drop-densest-as-needed --force buildings.geojson
+The page loads building cards and related data directly from Supabase using the publishable key. RLS controls browser access. Building polygons are served as PMTiles. Build the archive directly from the existing `gebaeude_stp` relation using the URL and publishable key already in `config.js`:
 
-The Supabase anon key is read-only (RLS). Colours use `year_built` (gray = unknown).
+    python scripts/build_pmtiles.py
+
+The script writes `buildings.pmtiles` in the project root. Install `tippecanoe` before building. CI can override the config with `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` environment variables. The export maps `globalid`, `address_1`, `address_2`, `hoehe_objekt_max`, and `building_year` to tile properties. For publication, serve the archive as a static asset with HTTP byte-range support; rely on RLS for Supabase data access.
