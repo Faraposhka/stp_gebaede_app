@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -36,3 +36,10 @@ jobs:
           path: buildings.pmtiles
           if-no-files-found: error
           retention-days: 7
+
+      - name: Commit updated PMTiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add buildings.pmtiles
+          git diff --cached --quiet || (git commit -m "Rebuild PMTiles" && git push)
